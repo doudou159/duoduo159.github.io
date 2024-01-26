@@ -1,0 +1,278 @@
+# alevinQC 使用
+
+[https://csoneson.github.io/alevinQC/articles/alevinqc.html#assumed-output-directory-structure](https://csoneson.github.io/alevinQC/articles/alevinqc.html#assumed-output-directory-structure)
+
+## 介绍
+
+*[alevinQC](https://bioconductor.org/packages/3.18/alevinQC)*包的目的 是根据[alevin](https://salmon.readthedocs.io/en/latest/alevin.html) （Srivastava 等人，2019）运行的输出生成一份汇总 QC 报告。QC 报告可以生成为 html 或 pdf 文件，也可以作为闪亮的应用程序启动
+
+## 安装
+
+`alevinQC`可以使用 `BiocManager`CRAN 包安装。
+
+```r
+if (![requireNamespace](https://rdrr.io/r/base/ns-load.html)("BiocManager", quietly = TRUE))    [install.packages](https://rdrr.io/r/utils/install.packages.html)("BiocManager")BiocManager::[install](https://bioconductor.github.io/BiocManager/reference/install.html)("alevinQC")
+```
+
+安装后，将包加载到 R 会话中。
+
+```
+library(alevinQC)
+```
+
+请注意，为了处理 Salmon v0.14 或更高版本的输出，您需要 Alevin v1.1 或更高版本
+
+### 安装报错
+
+```r
+先安装TRools。参考https://zhuanlan.zhihu.com/p/346947595
+BiocManager::[install](https://bioconductor.github.io/BiocManager/reference/install.html)("alevinQC")
+```
+
+## Assumed output directory structure
+
+有关运行 alevin 的更多信息，请参阅[文档](https://salmon.readthedocs.io/en/latest/alevin.html)。调用时，alevin 在指定的输出目录中生成多个输出文件。*[alevinQC](https://bioconductor.org/packages/3.18/alevinQC)* 假定保留此结构，如果没有保留，将返回错误 - 因此，不建议从 alevin 移动或重命名输出文件。*[alevinQC](https://bioconductor.org/packages/3.18/alevinQC)* 假定以下文件（在指示的结构中）在提供的文件中可用`baseDir`（**请注意，当前，为了生成完整的文件集，必须使用该 `--dumpFeatures`标志调用 alevin**）。alevin必须添加`—-dumpFeatures`
+
+对于 0.14 之前的 alevin 版本：
+
+```
+baseDir
+  |--alevin
+  |    |--featureDump.txt
+  |    |--filtered_cb_frequency.txt
+  |    |--MappedUmi.txt
+  |    |--quants_mat_cols.txt
+  |    |--quants_mat_rows.txt
+  |    |--quants_mat.gz
+  |    |--raw_cb_frequency.txt #添加 **--dumpFeatures才会出现**
+  |    |--whitelist.txt
+  |--aux_info
+  |    |--meta_info.json
+  |--cmd_info.json
+```
+
+对于 alevin 0.14 及更高版本：
+
+```
+baseDir
+  |--alevin
+  |    |--featureDump.txt
+  |    |--raw_cb_frequency.txt #添加 **--dumpFeatures才会出现**
+  |    |--whitelist.txt  (depending on how alevin was run)
+  |--aux_info
+  |    |--meta_info.json
+  |    |--alevin_meta_info.json
+  |--cmd_info.json
+```
+
+## **检查所有必需的 alevin 文件是否可用**
+
+报告生成功能（见下文）将检查所提供的基本目录中是否提供所有必需的文件。但是，您也可以调用该函数`[checkAlevinInputFiles()](https://csoneson.github.io/alevinQC/reference/checkAlevinInputFiles.html)`来手动运行检查。如果一个或多个文件丢失，该函数将引发一个错误，指示丢失的文件。
+
+```
+baseDir <-system.file("extdata/alevin_example_v0.14", package = "alevinQC")
+checkAlevinInputFiles(baseDir = baseDir)
+#> [1] "v0.14"
+```
+
+## Generate QC report
+
+该`[alevinQCReport()](https://csoneson.github.io/alevinQC/reference/qcReport.html)`函数根据 alevin 输出生成 QC 报告。根据 `outputFile`参数的文件扩展名和 的值 `outputFormat`，该函数可以生成 html 报告或 pdf 报告
+
+```
+outputDir <-tempdir()
+alevinQCReport(baseDir = baseDir, sampleId = "testSample",
+               outputFile = "alevinReport.html",
+               outputFormat = "html_document",
+               outputDir = outputDir, forceOverwrite = TRUE)
+```
+
+## **创建闪亮的应用程序**
+
+除了静态报告之外，*[alevinQC](https://bioconductor.org/packages/3.18/alevinQC)* 还可以生成闪亮的应用程序，其中包含与 pdf 和 html 报告相同的摘要数据
+
+```
+app <-alevinQCShiny(baseDir = baseDir, sampleId = "testSample")
+```
+
+*[创建后，可以使用闪亮](https://cran.r-project.org/package=shiny)*`runApp()`包 中的功能启动该应用程序 。
+
+```
+shiny::runApp(app)
+```
+
+# 生成单独的图
+
+QC 报告中包含的各个图也可以独立生成。为此，我们必须首先将 alevin 输出读入 R 对象。
+
+```
+alevin <-readAlevinQC(baseDir = baseDir)
+```
+
+结果列表包含四个条目：
+
+- `cbTabledata.frame`：具有各个细胞条形码的各种推断特征。
+- `summaryTablesdata.frame`： s 的列表，分别包含有关完整数据集、白名单单元格的初始集和白名单单元格的最终集的摘要信息。
+- `versionTablematrix`：包含有关 alevin 调用的信息。
+- `typecharacte`：一个标量，指示 alevinQC 如何解释 alevin 输出目录。
+
+```
+head(alevin$cbTable)
+#>                 CB originalFreq ranking collapsedFreq nbrMappedUMI
+#> 1 GACTGCGAGGGCATGT       121577       1        123419       104128
+#> 2 GGTGCGTAGGCTACGA       110467       2        111987        93608
+#> 3 ATGAGGGAGTAGTGCG       106446       3        108173        88481
+#> 4 ACTGTCCTCATGCTCC       104794       4        106085        81879
+#> 5 CGAACATTCTGATACG       104616       5        106072        84395
+#> 6 ACTGTCCCATATGGTC        99208       6        100776        81066
+#>   totalUMICount mappingRate dedupRate  MeanByMax nbrGenesAboveZero
+#> 1         73312    0.843695  0.295943 0.00735194              7512
+#> 2         66002    0.835883  0.294911 0.00783094              7522
+#> 3         62196    0.817958  0.297069 0.00832595              7081
+#> 4         57082    0.771824  0.302849 0.00619664              6956
+#> 5         58547    0.795639  0.306274 0.00743685              7347
+#> 6         56534    0.804418  0.302618 0.00947029              6841
+#>   nbrGenesAboveMean ArborescenceCount inFinalWhiteList inFirstWhiteList
+#> 1              1237           1.42034             TRUE             TRUE
+#> 2              1238           1.41826             TRUE             TRUE
+#> 3              1151           1.42262             TRUE             TRUE
+#> 4               957           1.43441             TRUE             TRUE
+#> 5              1238           1.44149             TRUE             TRUE
+#> 6              1068           1.43393             TRUE             TRUE
+```
+
+```
+knitr::kable(alevin$summaryTables$fullDataset)
+```
+
+| Total number of processed reads                 | 7197662 |
+| ----------------------------------------------- | ------- |
+| Number of reads with Ns                         | 35362   |
+| Number of reads with valid cell barcode (no Ns) | 7162300 |
+| Number of mapped reads                          | 4869156 |
+| Percent mapped (of all reads)                   | 67.65%  |
+| Number of noisy CB reads                        | 1003624 |
+| Number of noisy UMI reads                       | 266     |
+| Total number of observed cell barcodes          | 188613  |
+
+```
+knitr::kable(alevin$summaryTables$initialWhitelist)
+```
+
+| Number of barcodes (initial whitelist)                       | 100    |
+| ------------------------------------------------------------ | ------ |
+| Number of barcodes with quantification (initial whitelist)   | 100    |
+| Fraction reads in barcodes (initial whitelist)               | 84.64% |
+| Mean number of reads per cell (initial whitelist)            | 60620  |
+| Median number of reads per cell (initial whitelist)          | 58132  |
+| Mean number of detected genes per cell (initial whitelist)   | 5163   |
+| Median number of detected genes per cell (initial whitelist) | 5268   |
+| Mean UMI count per cell (initial whitelist)                  | 33274  |
+| Median UMI count per cell (initial whitelist)                | 31353  |
+
+```
+knitr::kable(alevin$summaryTables$finalWhitelist)
+```
+
+| Number of barcodes (final whitelist)                       | 95     |
+| ---------------------------------------------------------- | ------ |
+| Number of barcodes with quantification (final whitelist)   | 95     |
+| Fraction reads in barcodes (final whitelist)               | 82.39% |
+| Mean number of reads per cell (final whitelist)            | 62118  |
+| Median number of reads per cell (final whitelist)          | 58725  |
+| Mean number of detected genes per cell (final whitelist)   | 5260   |
+| Median number of detected genes per cell (final whitelist) | 5343   |
+| Mean UMI count per cell (final whitelist)                  | 34091  |
+| Median UMI count per cell (final whitelist)                | 32028  |
+
+```
+knitr::kable(alevin$versionTable)
+```
+
+| Start time     | Thu May 30 13:06:55 2019                                   |
+| -------------- | ---------------------------------------------------------- |
+| Salmon version | 0.14.0                                                     |
+| Index          | /mnt/scratch5/avi/alevin/data/mohu/salmon_index            |
+| R1file         | /mnt/scratch5/avi/alevin/data/10x/v2/mohu/100/all_bcs.fq   |
+| R2file         | /mnt/scratch5/avi/alevin/data/10x/v2/mohu/100/all_reads.fq |
+| tgMap          | /mnt/scratch5/avi/alevin/data/mohu/gtf/txp2gene.tsv        |
+| Library type   | ISR                                                        |
+
+The plots can now be generated using the dedicated plotting functions provided with *[alevinQC](https://bioconductor.org/packages/3.18/alevinQC)* (see the help file for the respective function for more information).
+
+```
+plotAlevinKneeRaw(alevin$cbTable)
+```
+
+![alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-1.png](alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-1.png)
+
+plotAlevinBarcodeCollapse(alevin$cbTable)
+
+![alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-2.png](alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-2.png)
+
+```
+plotAlevinQuant(alevin$cbTable)
+```
+
+![alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-3.png](alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-3.png)
+
+```
+plotAlevinKneeNbrGenes(alevin$cbTable)
+```
+
+![alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-4.png](alevinQC%20%E4%BD%BF%E7%94%A8%20637c3b6c9e654c20bff90657d42e4828/v13-4.png)
+
+## Session info
+
+```
+sessionInfo()
+#> R version 4.3.1 (2023-06-16)
+#> Platform: x86_64-apple-darwin20 (64-bit)
+#> Running under: macOS Monterey 12.7
+#>
+#> Matrix products: default
+#> BLAS:   /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib
+#> LAPACK: /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+#>
+#> locale:
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+#>
+#> time zone: UTC
+#> tzcode source: internal
+#>
+#> attached base packages:
+#> [1] stats     graphics  grDevices utils     datasets  methods   base
+#>
+#> other attached packages:
+#> [1] alevinQC_1.19.0  BiocStyle_2.29.2
+#>
+#> loaded via a namespace (and not attached):
+#>  [1] tximport_1.29.1      gtable_0.3.4         rjson_0.2.21
+#>  [4] xfun_0.40            bslib_0.5.1          ggplot2_3.4.4
+#>  [7] htmlwidgets_1.6.2    GGally_2.1.2         crosstalk_1.2.0
+#> [10] vctrs_0.6.4          tools_4.3.1          generics_0.1.3
+#> [13] tibble_3.2.1         fansi_1.0.5          pkgconfig_2.0.3
+#> [16] RColorBrewer_1.1-3   desc_1.4.2           lifecycle_1.0.3
+#> [19] compiler_4.3.1       farver_2.1.1         stringr_1.5.0
+#> [22] textshaping_0.3.7    munsell_0.5.0        fontawesome_0.5.2
+#> [25] httpuv_1.6.12        htmltools_0.5.6.1    sass_0.4.7
+#> [28] yaml_2.3.7           pillar_1.9.0         pkgdown_2.0.7.9000
+#> [31] later_1.3.1          jquerylib_0.1.4      ellipsis_0.3.2
+#> [34] DT_0.30              cachem_1.0.8         mime_0.12
+#> [37] tidyselect_1.2.0     digest_0.6.33        stringi_1.7.12
+#> [40] dplyr_1.1.3          purrr_1.0.2          bookdown_0.36
+#> [43] labeling_0.4.3       cowplot_1.1.1        rprojroot_2.0.3
+#> [46] fastmap_1.1.1        grid_4.3.1           colorspace_2.1-0
+#> [49] cli_3.6.1            magrittr_2.0.3       utf8_1.2.4
+#> [52] withr_2.5.1          scales_1.2.1         promises_1.2.1
+#> [55] rmarkdown_2.25       ragg_1.2.6           memoise_2.0.1
+#> [58] shiny_1.7.5.1        evaluate_0.22        knitr_1.44
+#> [61] rlang_1.1.1          Rcpp_1.0.11          xtable_1.8-4
+#> [64] glue_1.6.2           BiocManager_1.30.22  shinydashboard_0.7.2
+#> [67] reshape_0.8.9        jsonlite_1.8.7       R6_2.5.1
+#> [70] plyr_1.8.9           systemfonts_1.0.5    fs_1.6.3
+```
+
+## References
+
+Srivastava, Avi, Laraib Malik, Tom Sean Smith, Ian Sudbery, and Rob Patro. 2019. “Alevin Efficiently Estimates Accurate Gene Abundances from dscRNA-seq Data.” *Genome Biology* 20: 65.
